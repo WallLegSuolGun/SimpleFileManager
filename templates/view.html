@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件列表 - 已上传文件</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        /* 保持原有样式不变 */
+        body {
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background-color: #DCFFF5;
+            color: #0a6b5c;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 9999;
+            opacity: 0;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+        .toast.show {
+            transform: translateX(-50%) scale(1);
+            opacity: 1;
+        }
+        .toast-error {
+            background-color: #FFE8E8;
+            color: #7F1D1D;
+        }
+        .toast-icon {
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .modal-backdrop.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 420px;
+            transform: translateY(-30px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .modal-backdrop.active .modal-content {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* 确保按钮容器可见且不被截断 */
+        .modal-actions {
+            display: flex !important;
+            justify-content: flex-end !important;
+            gap: 12px !important;
+            margin-top: 16px !important;
+            padding-top: 16px !important;
+            border-top: 1px solid #eee !important;
+        }
+
+        /* 强制按钮可见的样式 */
+        .modal-btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 8px 16px !important;
+            min-width: 80px !important;
+            height: 40px !important;
+            cursor: pointer !important;
+            font-weight: 500 !important;
+            border-radius: 6px !important;
+            transition: all 0.2s ease !important;
+            text-decoration: none !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            position: relative !important;
+            z-index: 1000 !important;
+        }
+
+        .modal-btn-cancel {
+            background-color: #f3f4f6 !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+        }
+
+        .modal-btn-confirm {
+            background-color: #3B82F6 !important;
+            color: white !important;
+            border: 1px solid #3B82F6 !important;
+        }
+
+        .modal-btn-danger {
+            background-color: #EF4444 !important;
+            color: white !important;
+            border: 1px solid #EF4444 !important;
+        }
+
+        .upload-section {
+            background-color: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .upload-section:hover {
+            border-color: #87E8DE;
+            background-color: #f0fdfa;
+        }
+        .upload-btn {
+            background-color: #87E8DE;
+            color: #0a6b5c;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .upload-btn:hover {
+            background-color: #6ed7c9;
+            transform: translateY(-2px);
+        }
+
+        /* 操作按钮样式优化 */
+        .action-btn {
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            padding: 4px 6px !important;
+            border-radius: 4px !important;
+            position: relative !important;
+            z-index: 10 !important;
+        }
+        .action-btn:hover {
+            opacity: 0.85 !important;
+            background-color: rgba(0,0,0,0.05) !important;
+        }
+        .action-btn:focus {
+            outline: 1px solid #ddd !important;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+        table {
+            min-width: 600px;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        thead {
+            background-color: #f1f5f9;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .tag-badge {
+            background-color: #e0f2fe;
+            color: #0284c7;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-right: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .tag-checkbox {
+            margin-right: 8px;
+        }
+        
+        .tag-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            justify-content: space-between;
+        }
+        
+        .delete-tag-btn {
+            color: #EF4444;
+            cursor: pointer;
+            font-size: 0.8rem;
+            opacity: 0.7;
+            transition: all 0.2s;
+        }
+        
+        .delete-tag-btn:hover {
+            opacity: 1;
+        }
+        
+        .tag-management {
+            margin-bottom: 20px;
+            padding: 16px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="w-full max-w-6xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">已上传文件</h1>
+                <p class="text-gray-500 mt-1">管理您的所有上传文件</p>
+            </div>
+            
+            <!-- 标签筛选 -->
+            <div class="flex flex-wrap gap-2">
+                <select id="tagFilter" class="px-3 py-2 border rounded-lg">
+                    <option value="all">所有标签</option>
+                    {% for tag in tags %}
+                        <option value="{{ tag.id }}">{{ tag.name }}</option>
+                    {% endfor %}
+                </select>
+                
+                <!-- 顶部快捷上传按钮 -->
+                <a href="/" class="upload-btn">
+                    <i class="fa fa-cloud-upload"></i>立即上传
+                </a>
+            </div>
+        </header>
+        
+        <!-- 标签管理区域 -->
+        <div class="tag-management">
+            <h3 class="text-lg font-semibold mb-3">标签管理</h3>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="newTagName" placeholder="输入新标签名称" 
+                       class="px-3 py-2 border rounded-lg flex-1">
+                <button id="createTagBtn" class="modal-btn modal-btn-confirm">
+                    创建标签
+                </button>
+            </div>
+            <div id="allTagsList" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-2">
+                <!-- 标签列表将通过JS动态加载 -->
+            </div>
+        </div>
+
+        
+        <main class="bg-white rounded-lg shadow-md p-6 md:p-8">
+            {% if not files %}
+                <div class="text-center py-12">
+                    <i class="fa fa-folder-open-o text-5xl text-gray-300 mb-4"></i>
+                    <p class="text-gray-500 mb-4">暂无上传文件</p>
+                    <a href="/" class="upload-btn">
+                        <i class="fa fa-upload mr-1"></i>立即上传第一个文件
+                    </a>
+                </div>
+            {% else %}
+                <!-- 文件列表 -->
+                <div class="table-responsive">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-3">文件名</th>
+                                <th class="px-4 py-3">标签</th>
+                                <th class="px-4 py-3">大小</th>
+                                <th class="px-4 py-3">上传时间</th>
+                                <th class="px-4 py-3 w-48">操作</th> <!-- 固定操作列宽度 -->
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in files %}
+                                <tr data-file-id="{{ file.id }}" data-tags="{{ file.tags|map(attribute='id')|list|join(',') }}">
+                                    <!-- 文件名 -->
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center">
+                                            {% if file.original_filename.endswith(('.jpg', '.jpeg', '.png', '.gif')) %}
+                                                <i class="fa fa-file-image-o text-primary mr-2"></i>
+                                            {% elif file.original_filename.endswith('.pdf') %}
+                                                <i class="fa fa-file-pdf-o text-danger mr-2"></i>
+                                            {% elif file.original_filename.endswith(('.doc', '.docx')) %}
+                                                <i class="fa fa-file-word-o text-blue-500 mr-2"></i>
+                                            {% elif file.original_filename.endswith(('.xls', '.xlsx')) %}
+                                                <i class="fa fa-file-excel-o text-green-500 mr-2"></i>
+                                            {% elif file.original_filename.endswith(('.zip', '.rar', '.7z')) %}
+                                                <i class="fa fa-file-archive-o text-yellow-500 mr-2"></i>
+                                            {% else %}
+                                                <i class="fa fa-file-o text-gray-500 mr-2"></i>
+                                            {% endif %}
+                                            <span class="font-medium">{{ file.original_filename }}</span>
+                                        </div>
+                                    </td>
+                                    <!-- 标签 -->
+                                    <td class="px-4 py-3">
+                                        {% if file.tags and file.tags|length > 0 %}
+                                            {% for tag in file.tags %}
+                                                <span class="tag-badge">
+                                                    {{ tag.name }}
+                                                </span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-gray-400 text-sm">无标签</span>
+                                        {% endif %}
+                                    </td>
+                                    <!-- 文件大小 -->
+                                    <td class="px-4 py-3 text-sm text-gray-500">
+                                        {% set size = file.file_size %}
+                                        {% if size >= 1024*1024*1024 %}
+                                            {{ (size/(1024*1024*1024))|round(2) }} GB
+                                        {% elif size >= 1024*1024 %}
+                                            {{ (size/(1024*1024))|round(2) }} MB
+                                        {% else %}
+                                            {{ (size/1024)|round(2) }} KB
+                                        {% endif %}
+                                    </td>
+                                    <!-- 上传时间 -->
+                                    <td class="px-4 py-3 text-sm text-gray-500">
+                                        {{ file.upload_time }}
+                                    </td>
+                                    <!-- 操作按钮 -->
+                                    <td class="px-4 py-3">
+                                        <div class="flex gap-2 flex-wrap">
+                                            <!-- 下载按钮 -->
+                                            <a href="/download/{{ file.saved_filename }}" 
+                                               class="action-btn text-primary hover:text-blue-600"
+                                               title="下载">
+                                                <i class="fa fa-download mr-1"></i>下载
+                                            </a>
+                                            <!-- 编辑标签按钮 -->
+                                            <button class="action-btn text-blue-500 hover:text-blue-600 edit-tags-btn"
+                                                    data-file-id="{{ file.id }}"
+                                                    data-file-name="{{ file.original_filename }}"
+                                                    title="编辑标签">
+                                                <i class="fa fa-tags mr-1"></i>标签
+                                            </button>
+                                            <!-- 重命名按钮 -->
+                                            <button class="action-btn text-purple-500 hover:text-purple-600 rename-btn"
+                                                    data-file-id="{{ file.id }}"
+                                                    data-file-name="{{ file.original_filename }}"
+                                                    title="重命名">
+                                                <i class="fa fa-pencil mr-1"></i>重命名
+                                            </button>
+                                            <!-- 删除按钮 -->
+                                            <button class="action-btn text-red-500 hover:text-red-600 delete-btn"
+                                                    data-saved="{{ file.saved_filename }}"
+                                                    data-name="{{ file.original_filename }}"
+                                                    title="删除">
+                                                <i class="fa fa-trash mr-1"></i>删除
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div class="modal-backdrop" id="deleteModal">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">确认删除</h3>
+            <p class="text-gray-600 mb-6">
+                您确定要删除文件 <span id="deleteFileName" class="font-medium"></span> 吗？<br>
+                此操作不可撤销。
+            </p>
+            <div class="modal-actions">
+                <button id="cancelDelete" class="modal-btn modal-btn-cancel">
+                    取消
+                </button>
+                <button id="confirmDelete" class="modal-btn modal-btn-danger">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除标签确认模态框 -->
+    <div class="modal-backdrop" id="deleteTagModal">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">确认删除标签</h3>
+            <p class="text-gray-600 mb-6">
+                您确定要删除标签 <span id="deleteTagName" class="font-medium"></span> 吗？<br>
+                此操作将同时移除所有文件上的该标签，不可撤销。
+            </p>
+            <div class="modal-actions">
+                <button id="cancelDeleteTag" class="modal-btn modal-btn-cancel">
+                    取消
+                </button>
+                <button id="confirmDeleteTag" class="modal-btn modal-btn-danger">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑标签模态框 -->
+    <div class="modal-backdrop" id="editTagsModal">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">编辑文件标签</h3>
+            <p class="text-gray-600 mb-4" id="editTagsFileName"></p>
+            <div id="allTagsContainer" class="mb-6 max-h-60 overflow-y-auto pr-2">
+                <!-- 标签将通过JS动态加载 -->
+            </div>
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex gap-2">
+                    <input type="text" id="newTagInput" placeholder="输入新标签名称" 
+                           class="px-3 py-2 border rounded-lg flex-1">
+                    <button id="addNewTagBtn" class="modal-btn modal-btn-confirm">
+                        添加
+                    </button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancelEditTags" class="modal-btn modal-btn-cancel">
+                    取消
+                </button>
+                <button id="confirmEditTags" class="modal-btn modal-btn-confirm">
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重命名文件模态框 -->
+    <div class="modal-backdrop" id="renameModal">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">重命名文件</h3>
+            <p class="text-gray-600 mb-4">请输入新的文件名（保留原文件扩展名）</p>
+            <input type="text" id="newFileName" class="px-3 py-2 border rounded-lg w-full mb-6">
+            <div class="modal-actions">
+                <button id="cancelRename" class="modal-btn modal-btn-cancel">
+                    取消
+                </button>
+                <button id="confirmRename" class="modal-btn modal-btn-confirm">
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示框 -->
+    <div class="toast" id="toast">
+        <span class="toast-icon" id="toastIcon">✓</span>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 通用元素
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+            const tagFilter = document.getElementById('tagFilter');
+            const fileRows = document.querySelectorAll('tbody tr');
+            const newTagNameInput = document.getElementById('newTagName');
+            const createTagBtn = document.getElementById('createTagBtn');
+            const allTagsList = document.getElementById('allTagsList');
+            
+            // 删除相关元素
+            const deleteModal = document.getElementById('deleteModal');
+            const deleteFileName = document.getElementById('deleteFileName');
+            const cancelDelete = document.getElementById('cancelDelete');
+            const confirmDelete = document.getElementById('confirmDelete');
+            
+            // 删除标签相关元素
+            const deleteTagModal = document.getElementById('deleteTagModal');
+            const deleteTagName = document.getElementById('deleteTagName');
+            const cancelDeleteTag = document.getElementById('cancelDeleteTag');
+            const confirmDeleteTag = document.getElementById('confirmDeleteTag');
+            
+            // 编辑标签相关元素
+            const editTagsModal = document.getElementById('editTagsModal');
+            const editTagsFileName = document.getElementById('editTagsFileName');
+            const allTagsContainer = document.getElementById('allTagsContainer');
+            const newTagInput = document.getElementById('newTagInput');
+            const addNewTagBtn = document.getElementById('addNewTagBtn');
+            const cancelEditTags = document.getElementById('cancelEditTags');
+            const confirmEditTags = document.getElementById('confirmEditTags');
+            
+            // 重命名相关元素
+            const renameModal = document.getElementById('renameModal');
+            const newFileName = document.getElementById('newFileName');
+            const cancelRename = document.getElementById('cancelRename');
+            const confirmRename = document.getElementById('confirmRename');
+            
+            // 全局变量
+            let currentFile = null;
+            let allTags = [];
+            let selectedTagIds = [];
+            let currentFileId = null;
+            let currentTagId = null;
+            
+            // 初始化 - 加载所有标签
+            loadAllTags();
+            
+            // 绑定事件
+            bindEvents();
+            
+            // 绑定所有事件
+            function bindEvents() {
+                // 绑定创建标签事件
+                createTagBtn.addEventListener('click', createNewTag);
+                
+                // 绑定编辑标签按钮事件
+                document.querySelectorAll('.edit-tags-btn').forEach(button => {
+                    button.addEventListener('click', handleEditTagsClick);
+                });
+                
+                // 绑定重命名按钮事件
+                document.querySelectorAll('.rename-btn').forEach(button => {
+                    button.addEventListener('click', handleRenameClick);
+                });
+                
+                // 绑定删除按钮事件
+                document.querySelectorAll('.delete-btn').forEach(button => {
+                    button.addEventListener('click', handleDeleteClick);
+                });
+                
+                // 标签筛选功能
+                tagFilter.addEventListener('change', filterByTag);
+                
+                // 编辑标签模态框事件
+                cancelEditTags.addEventListener('click', () => hideModal(editTagsModal));
+                confirmEditTags.addEventListener('click', confirmEditTagsHandler);
+                addNewTagBtn.addEventListener('click', addNewTagInModal);
+                
+                // 重命名模态框事件
+                cancelRename.addEventListener('click', () => hideModal(renameModal));
+                confirmRename.addEventListener('click', confirmRenameHandler);
+                
+                // 删除模态框事件
+                cancelDelete.addEventListener('click', () => hideModal(deleteModal));
+                confirmDelete.addEventListener('click', confirmDeleteHandler);
+                
+                // 删除标签模态框事件
+                cancelDeleteTag.addEventListener('click', () => hideModal(deleteTagModal));
+                confirmDeleteTag.addEventListener('click', confirmDeleteTagHandler);
+                
+                // 点击模态框背景关闭
+                [deleteModal, editTagsModal, renameModal, deleteTagModal].forEach(modal => {
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            hideModal(modal);
+                        }
+                    });
+                });
+            }
+            
+            // 创建新标签
+            function createNewTag() {
+                const tagName = newTagNameInput.value.trim();
+                if (!tagName) return;
+                
+                fetch('/tags', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: tagName})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        newTagNameInput.value = '';
+                        loadAllTags();
+                        showToast(`标签 "${tagName}" 创建成功`);
+                    } else {
+                        showToast(data.error || '创建标签失败', false);
+                    }
+                })
+                .catch(error => {
+                    console.error('创建标签失败:', error);
+                    showToast('创建标签失败', false);
+                });
+            }
+            
+            // 加载所有标签并显示
+            function loadAllTags() {
+                return fetch('/tags')
+                    .then(response => response.json())
+                    .then(tags => {
+                        allTags = tags;
+                        renderAllTagsList();
+                        return tags;
+                    })
+                    .catch(error => {
+                        console.error('加载标签失败:', error);
+                        showToast('加载标签失败', false);
+                        return [];
+                    });
+            }
+            
+            // 渲染所有标签列表（用于标签管理区域）
+            function renderAllTagsList() {
+                allTagsList.innerHTML = '';
+                
+                if (allTags.length === 0) {
+                    allTagsList.innerHTML = '<p class="text-gray-500 text-sm">暂无标签，请创建新标签</p>';
+                    return;
+                }
+                
+                allTags.forEach(tag => {
+                    const tagEl = document.createElement('div');
+                    tagEl.className = 'tag-item';
+                    tagEl.innerHTML = `
+                        <span class="tag-badge">${tag.name}</span>
+                        <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
+                            <i class="fa fa-times"></i> 删除
+                        </button>
+                    `;
+                    
+                    // 绑定删除标签事件
+                    tagEl.querySelector('.delete-tag-btn').addEventListener('click', (e) => {
+                        currentTagId = parseInt(e.target.closest('.delete-tag-btn').dataset.tagId);
+                        const tagName = e.target.closest('.delete-tag-btn').dataset.tagName;
+                        
+                        deleteTagName.textContent = tagName;
+                        showModal(deleteTagModal);
+                    });
+                    
+                    allTagsList.appendChild(tagEl);
+                });
+            }
+            
+            // 确认删除标签
+            function confirmDeleteTagHandler() {
+                if (!currentTagId) return;
+                
+                fetch(`/tags/${currentTagId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (response.ok && data.success) {
+                        showToast(data.message || '标签删除成功');
+                        hideModal(deleteTagModal);
+                        loadAllTags(); // 重新加载标签列表
+                        // 刷新标签筛选下拉框
+                        refreshTagFilter();
+                    } else {
+                        showToast(data.error || '删除标签失败', false);
+                    }
+                })
+                .catch(error => {
+                    console.error('删除标签失败:', error);
+                    showToast('删除标签失败', false);
+                });
+            }
+            
+            // 刷新标签筛选下拉框
+            function refreshTagFilter() {
+                const currentValue = tagFilter.value;
+                const selectedIndex = tagFilter.selectedIndex;
+                
+                // 清空现有选项（保留"所有标签"）
+                while (tagFilter.options.length > 1) {
+                    tagFilter.remove(1);
+                }
+                
+                // 添加新标签选项
+                allTags.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag.id;
+                    option.textContent = tag.name;
+                    tagFilter.appendChild(option);
+                });
+                
+                // 尝试恢复之前的选择
+                if (currentValue === 'all' || !allTags.some(tag => tag.id.toString() === currentValue)) {
+                    tagFilter.selectedIndex = 0;
+                } else {
+                    tagFilter.value = currentValue;
+                }
+                
+                // 触发筛选事件
+                filterByTag();
+            }
+            
+            // 编辑标签按钮点击处理函数
+            function handleEditTagsClick(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                
+                currentFileId = this.getAttribute('data-file-id');
+                const fileName = this.getAttribute('data-file-name');
+                
+                if (!currentFileId) {
+                    console.error('未找到文件ID');
+                    return;
+                }
+                
+                editTagsFileName.textContent = `文件: ${fileName}`;
+                
+                // 加载所有标签和文件当前标签
+                loadAllTags().then(() => {
+                    getFileTags(currentFileId).then(fileTagIds => {
+                        selectedTagIds = [...fileTagIds];
+                        renderTagCheckboxes(selectedTagIds);
+                        showModal(editTagsModal);
+                    });
+                });
+            }
+            
+            // 重命名按钮点击处理函数
+            function handleRenameClick(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                
+                currentFileId = this.getAttribute('data-file-id');
+                const fileName = this.getAttribute('data-file-name');
+                
+                if (!currentFileId) {
+                    console.error('未找到文件ID');
+                    return;
+                }
+                
+                // 提取文件名和扩展名
+                const lastDotIndex = fileName.lastIndexOf('.');
+                let baseName = fileName;
+                let extension = '';
+                
+                if (lastDotIndex !== -1) {
+                    baseName = fileName.substring(0, lastDotIndex);
+                    extension = fileName.substring(lastDotIndex);
+                }
+                
+                newFileName.value = fileName;
+                showModal(renameModal);
+            }
+            
+            // 删除按钮点击处理函数
+            function handleDeleteClick(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                
+                currentFile = {
+                    saved: this.getAttribute('data-saved'),
+                    name: this.getAttribute('data-name')
+                };
+                deleteFileName.textContent = currentFile.name;
+                showModal(deleteModal);
+            }
+            
+            // 按标签筛选文件
+            function filterByTag() {
+                const selectedTag = tagFilter.value;
+                fileRows.forEach(row => {
+                    if (selectedTag === 'all') {
+                        row.style.display = '';
+                    } else {
+                        const rowTags = row.dataset.tags.split(',').filter(Boolean);
+                        row.style.display = rowTags.includes(selectedTag) ? '' : 'none';
+                    }
+                });
+            }
+
+            // 显示提示
+            function showToast(message, isSuccess = true) {
+                toastMessage.textContent = message;
+                toastIcon.textContent = isSuccess ? '✓' : '!';
+                toast.className = 'toast';
+                if (!isSuccess) {
+                    toast.classList.add('toast-error');
+                }
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+            
+            // 显示模态框
+            function showModal(modal) {
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+            
+            // 隐藏模态框
+            function hideModal(modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+            
+            // 获取文件当前标签
+            function getFileTags(fileId) {
+                return fetch(`/file/${fileId}/tags`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('获取文件标签失败');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        return data.tags.map(tag => tag.id);
+                    })
+                    .catch(error => {
+                        console.error('获取文件标签失败:', error);
+                        showToast('获取文件标签失败', false);
+                        return [];
+                    });
+            }
+            
+            // 渲染标签选择列表
+            function renderTagCheckboxes(selectedIds) {
+                allTagsContainer.innerHTML = '';
+                
+                if (allTags.length === 0) {
+                    allTagsContainer.innerHTML = '<p class="text-gray-500">暂无标签，请添加新标签</p>';
+                    return;
+                }
+                
+                allTags.forEach(tag => {
+                    const tagEl = document.createElement('div');
+                    tagEl.className = 'tag-item';
+                    tagEl.innerHTML = `
+                        <div>
+                            <input type="checkbox" data-tag-id="${tag.id}" 
+                                   class="tag-checkbox" 
+                                   ${selectedIds.includes(tag.id) ? 'checked' : ''}>
+                            <label for="tag-${tag.id}">${tag.name}</label>
+                        </div>
+                    `;
+                    
+                    tagEl.querySelector('.tag-checkbox').addEventListener('change', (e) => {
+                        const tagId = parseInt(e.target.dataset.tagId);
+                        if (e.target.checked) {
+                            if (!selectedTagIds.includes(tagId)) {
+                                selectedTagIds.push(tagId);
+                            }
+                        } else {
+                            selectedTagIds = selectedTagIds.filter(id => id !== tagId);
+                        }
+                    });
+                    
+                    allTagsContainer.appendChild(tagEl);
+                });
+            }
+            
+            // 在编辑标签模态框中添加新标签
+            function addNewTagInModal() {
+                const tagName = newTagInput.value.trim();
+                if (!tagName) return;
+                
+                fetch('/tags', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: tagName})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        newTagInput.value = '';
+                        loadAllTags().then(() => {
+                            renderTagCheckboxes(selectedTagIds);
+                        });
+                        showToast(`标签 "${tagName}" 创建成功`);
+                    } else {
+                        showToast(data.error || '创建标签失败', false);
+                    }
+                })
+                .catch(error => {
+                    showToast('创建标签失败', false);
+                });
+            }
+            
+            // 确认编辑标签
+            function confirmEditTagsHandler() {
+                if (!currentFileId) return;
+                
+                fetch(`/file/${currentFileId}/tags`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({tag_ids: selectedTagIds})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (response.ok && data.success) {
+                        showToast('标签更新成功');
+                        hideModal(editTagsModal);
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showToast(data.error || '更新标签失败', false);
+                    }
+                })
+                .catch(error => {
+                    console.error('更新标签失败:', error);
+                    showToast('更新标签失败', false);
+                });
+            }
+            
+            // 确认重命名
+            function confirmRenameHandler() {
+                if (!currentFileId) return;
+                
+                const newName = newFileName.value.trim();
+                if (!newName) {
+                    showToast('文件名不能为空', false);
+                    return;
+                }
+                
+                fetch(`/file/${currentFileId}/rename`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({new_name: newName})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (response.ok && data.success) {
+                        showToast('文件重命名成功');
+                        hideModal(renameModal);
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showToast(data.error || '重命名失败', false);
+                    }
+                })
+                .catch(error => {
+                    console.error('重命名失败:', error);
+                    showToast('重命名失败', false);
+                });
+            }
+            
+            // 确认删除
+            function confirmDeleteHandler() {
+                if (!currentFile) return;
+                
+                fetch(`/delete/${currentFile.saved}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (response.ok && data.success) {
+                        showToast(`文件 "${currentFile.name}" 已成功删除`);
+                        hideModal(deleteModal);
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showToast(data.error || '删除失败', false);
+                    }
+                })
+                .catch(error => {
+                    showToast('删除失败，请重试', false);
+                    console.error('删除错误:', error);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+    
