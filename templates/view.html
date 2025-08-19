@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件列表 - 已上传文件</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        /* 网页背景为白色 */
+        body {
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        /* 提示窗口样式 - 青绿色背景、顶部居中 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background-color: #DCFFF5; /* 青绿色背景 */
+            color: #0a6b5c; /* 深青色文字 */
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 9999;
+            opacity: 0;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+        .toast.show {
+            transform: translateX(-50%) scale(1);
+            opacity: 1;
+        }
+        .toast-icon {
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        /* 模态框样式 */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .modal-backdrop.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 420px;
+            transform: translateY(-30px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .modal-backdrop.active .modal-content {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* 上传入口样式强化 */
+        .upload-section {
+            background-color: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .upload-section:hover {
+            border-color: #87E8DE; /* 青绿色边框高亮 */
+            background-color: #f0fdfa;
+        }
+        .upload-btn {
+            background-color: #87E8DE;
+            color: #0a6b5c;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .upload-btn:hover {
+            background-color: #6ed7c9;
+            transform: translateY(-2px);
+        }
+
+        /* 其他基础样式 */
+        .action-btn {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .action-btn:hover {
+            opacity: 0.85;
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        table {
+            min-width: 600px;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        thead {
+            background-color: #f1f5f9;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        tr:hover {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <!-- 主容器 -->
+    <div class="w-full max-w-6xl mx-auto">
+        <!-- 头部导航 -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">已上传文件</h1>
+                <p class="text-gray-500 mt-1">管理您的所有上传文件</p>
+            </div>
+            
+            <!-- 顶部快捷上传按钮 -->
+            <a href="/" class="upload-btn">
+                <i class="fa fa-cloud-upload"></i>立即上传
+            </a>
+        </header>
+
+        
+        <!-- 主内容区 -->
+        <main class="bg-white rounded-lg shadow-md p-6 md:p-8">
+            {% if not files %}
+                <!-- 空状态 -->
+                <div class="text-center py-12">
+                    <i class="fa fa-folder-open-o text-5xl text-gray-300 mb-4"></i>
+                    <p class="text-gray-500 mb-4">暂无上传文件</p>
+                    <a href="/" class="upload-btn">
+                        <i class="fa fa-upload mr-1"></i>立即上传第一个文件
+                    </a>
+                </div>
+            {% else %}
+                <!-- 文件列表 -->
+                <div class="table-responsive">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-3">文件名</th>
+                                <th class="px-4 py-3">大小</th>
+                                <th class="px-4 py-3">上传时间</th>
+                                <th class="px-4 py-3">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in files %}
+                                <tr>
+                                    <!-- 文件名 -->
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center">
+                                            {% if file.original_filename.endswith(('.jpg', '.jpeg', '.png', '.gif')) %}
+                                                <i class="fa fa-file-image-o text-primary mr-2"></i>
+                                            {% elif file.original_filename.endswith('.pdf') %}
+                                                <i class="fa fa-file-pdf-o text-danger mr-2"></i>
+                                            {% elif file.original_filename.endswith(('.doc', '.docx')) %}
+                                                <i class="fa fa-file-word-o text-blue-500 mr-2"></i>
+                                            {% elif file.original_filename.endswith(('.xls', '.xlsx')) %}
+                                                <i class="fa fa-file-excel-o text-green-500 mr-2"></i>
+                                            {% elif file.original_filename.endswith(('.zip', '.rar', '.7z')) %}
+                                                <i class="fa fa-file-archive-o text-yellow-500 mr-2"></i>
+                                            {% else %}
+                                                <i class="fa fa-file-o text-gray-500 mr-2"></i>
+                                            {% endif %}
+                                            <span class="font-medium">{{ file.original_filename }}</span>
+                                        </div>
+                                    </td>
+                                    <!-- 文件大小 -->
+                                    <td class="px-4 py-3 text-sm text-gray-500">
+                                        {% set size = file.file_size %}
+                                        {% if size >= 1024*1024*1024 %}
+                                            {{ (size/(1024*1024*1024))|round(2) }} GB
+                                        {% elif size >= 1024*1024 %}
+                                            {{ (size/(1024*1024))|round(2) }} MB
+                                        {% else %}
+                                            {{ (size/1024)|round(2) }} KB
+                                        {% endif %}
+                                    </td>
+                                    <!-- 上传时间 -->
+                                    <td class="px-4 py-3 text-sm text-gray-500">
+                                        {{ file.upload_time }}
+                                    </td>
+                                    <!-- 操作按钮 -->
+                                    <td class="px-4 py-3">
+                                        <div class="flex gap-3">
+                                            <!-- 下载按钮 -->
+                                            <a href="/download/{{ file.saved_filename }}" 
+                                               class="action-btn text-primary hover:text-blue-600"
+                                               title="下载">
+                                                <i class="fa fa-download mr-1"></i>下载
+                                            </a>
+                                            <!-- 删除按钮 -->
+                                            <button class="action-btn text-red-500 hover:text-red-600 delete-btn"
+                                                    data-saved="{{ file.saved_filename }}"
+                                                    data-name="{{ file.original_filename }}"
+                                                    title="删除">
+                                                <i class="fa fa-trash mr-1"></i>删除
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                            {% endif %}
+        </main>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div class="modal-backdrop" id="deleteModal">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">确认删除</h3>
+            <p class="text-gray-600 mb-6">
+                您确定要删除文件 <span id="deleteFileName" class="font-medium"></span> 吗？<br>
+                此操作不可撤销。
+            </p>
+            <div class="flex justify-end gap-3">
+                <button id="cancelDelete" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+                    取消
+                </button>
+                <button id="confirmDelete" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示框 -->
+    <div class="toast" id="toast">
+        <span class="toast-icon" id="toastIcon">✓</span>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const deleteModal = document.getElementById('deleteModal');
+            const deleteFileName = document.getElementById('deleteFileName');
+            const cancelDelete = document.getElementById('cancelDelete');
+            const confirmDelete = document.getElementById('confirmDelete');
+            const deleteButtons = document.querySelectorAll('.delete-btn');
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+            
+            let currentFile = null;
+            
+            // 显示模态框
+            function showModal() {
+                deleteModal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+            
+            // 隐藏模态框
+            function hideModal() {
+                deleteModal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+            
+            // 显示提示
+            function showToast(message, isSuccess = true) {
+                toastMessage.textContent = message;
+                toastIcon.textContent = isSuccess ? '✓' : '!';
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+            
+            // 绑定删除按钮事件
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    currentFile = {
+                        saved: button.getAttribute('data-saved'),
+                        name: button.getAttribute('data-name')
+                    };
+                    deleteFileName.textContent = currentFile.name;
+                    showModal();
+                });
+            });
+            
+            // 取消删除
+            cancelDelete.addEventListener('click', hideModal);
+            
+            // 点击模态框背景关闭
+            deleteModal.addEventListener('click', (e) => {
+                if (e.target === deleteModal) {
+                    hideModal();
+                }
+            });
+            
+            // 确认删除
+            confirmDelete.addEventListener('click', async () => {
+                if (!currentFile) return;
+                
+                try {
+                    const response = await fetch(`/delete/${currentFile.saved}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        showToast(`文件 "${currentFile.name}" 已成功删除`);
+                        // 刷新页面或移除DOM元素
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showToast(data.error || '删除失败', false);
+                    }
+                } catch (error) {
+                    showToast('删除失败，请重试', false);
+                    console.error('删除错误:', error);
+                }
+                
+                hideModal();
+            });
+        });
+    </script>
+</body>
+</html>
