@@ -1,30 +1,36 @@
 import os
 import uuid
-import time
-import json
-from flask import Flask, request, jsonify, render_template, make_response, send_file
-from flask_sqlalchemy import SQLAlchemy
-from functools import wraps
 from datetime import datetime
-import threading
+from flask import Flask, render_template, request, jsonify, send_file
+from flask_sqlalchemy import SQLAlchemy
+from urllib.parse import quote
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['TEMP_FOLDER'] = os.path.join(app.config['UPLOAD_FOLDER'], 'temp')  # 新增：临时区块文件夹
-app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB
+app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
+app.config['TEMP_FOLDER'] = os.path.join(app.config['UPLOAD_FOLDER'], 'temp')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///files.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# 创建存储目录
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
+
 db = SQLAlchemy(app)
 
-# 确保上传目录和临时目录存在
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)  # 新增：创建临时文件夹
+# 标签模型
+class Tag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    files = db.relationship('File', secondary='file_tag', backref='tags', cascade="all, delete")
 
-# 上传进度跟踪
-upload_progress = {}
-progress_lock = threading.Lock()
+# 多对多关联表
+file_tag = db.Table('file_tag',
+    db.Column('file_id', db.Integer, db.ForeignKey('file.id'), primary_key=True),
+    db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True)
+)
 
-# 数据库模型
+# 文件模型
 class File(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     file_id = db.Column(db.String(36), unique=True, nullable=False)
@@ -34,7 +40,7 @@ class File(db.Model):
     file_size = db.Column(db.Integer, nullable=False)
     uploaded_size = db.Column(db.Integer, default=0)
     upload_time = db.Column(db.String(20), nullable=False)
-    status = db.Column(db.String(20), default='uploading')  # pending, uploading, success, error
+    status = db.Column(db.String(20), default='pending')  # pending, uploading, success, error
 
     def to_dict(self):
         return {
@@ -42,34 +48,28 @@ class File(db.Model):
             'file_id': self.file_id,
             'original_filename': self.original_filename,
             'saved_filename': self.saved_filename,
-            'file_path': self.file_path,
             'file_size': self.file_size,
-            'uploaded_size': self.uploaded_size,
             'upload_time': self.upload_time,
-            'status': self.status
+            'status': self.status,
+            'tags': [tag.name for tag in self.tags]
         }
 
-# 创建数据库表
-with app.app_context():
-    db.create_all()
-
+# 生成唯一文件名
 def generate_unique_filename(filename):
-    """生成唯一的文件名"""
     ext = os.path.splitext(filename)[1]
     return f"{uuid.uuid4().hex}{ext}"
 
-"""允许所有文件类型"""
+# 允许所有文件类型
 def allowed_file(filename):
-    """允许所有文件类型"""
     return True
 
-"""渲染上传页面"""
+# 渲染上传页面
 @app.route('/')
 def index():
-    """渲染上传页面"""
-    return render_template('index.html')
+    tags = Tag.query.all()
+    return render_template('index.html', tags=tags)
 
-"""初始化大文件上传"""
+# 初始化大文件上传
 @app.route('/upload/init', methods=['POST'])
 def init_upload():
     try:
@@ -106,7 +106,7 @@ def init_upload():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-"""处理文件分块上传"""
+# 处理文件分块上传
 @app.route('/upload/chunk', methods=['POST'])
 def upload_chunk():
     try:
@@ -125,10 +125,10 @@ def upload_chunk():
         if not file_record:
             return jsonify({'error': '文件记录不存在'}), 404
             
-        # 保存块文件到temp文件夹  # 修改：存储路径变更
+        # 保存块文件到temp文件夹
         chunk = request.files['chunk']
         chunk_filename = f"{file_record.saved_filename}.part{chunk_index}"
-        chunk_path = os.path.join(app.config['TEMP_FOLDER'], chunk_filename)  # 修改：使用临时文件夹
+        chunk_path = os.path.join(app.config['TEMP_FOLDER'], chunk_filename)
         chunk.save(chunk_path)
         
         # 更新已上传大小
@@ -143,7 +143,7 @@ def upload_chunk():
             with open(file_record.file_path, 'wb') as outfile:
                 for i in range(total_chunks):
                     part_filename = f"{file_record.saved_filename}.part{i}"
-                    part_path = os.path.join(app.config['TEMP_FOLDER'], part_filename)  # 修改：从临时文件夹读取
+                    part_path = os.path.join(app.config['TEMP_FOLDER'], part_filename)
                     with open(part_path, 'rb') as infile:
                         outfile.write(infile.read())
                     os.remove(part_path)  # 删除临时块文件
@@ -167,7 +167,28 @@ def upload_chunk():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-"""获取上传进度"""
+# 获取文件标签
+@app.route('/file/<file_id>/tags', methods=['GET'])
+def get_file_tags(file_id):
+    # 尝试先按file_id查询，如果失败再尝试按id查询
+    file = File.query.filter_by(file_id=file_id).first()
+    if not file:
+        try:
+            # 如果是数字ID，尝试按主键id查询
+            file_id_int = int(file_id)
+            file = File.query.get(file_id_int)
+        except ValueError:
+            pass
+    
+    if not file:
+        return jsonify({'error': '文件不存在'}), 404
+        
+    return jsonify({
+        'success': True,
+        'tags': [{'id': tag.id, 'name': tag.name} for tag in file.tags]
+    })
+
+# 获取上传进度
 @app.route('/upload/progress/<file_id>')
 def get_upload_progress(file_id):
     try:
@@ -186,33 +207,26 @@ def get_upload_progress(file_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-"""查询所有文件信息（按上传时间倒序）"""
+# 查询所有文件
 def get_all_files():
-    """查询所有文件信息（按上传时间倒序）"""
-    files = File.query.order_by(File.upload_time.desc()).all()
-    return [file.to_dict() for file in files]
+    return File.query.order_by(File.upload_time.desc()).all()
 
-"""渲染文件列表页面，展示所有上传的文件"""
+# 渲染文件列表页面
 @app.route('/view')
 def view_files():
-    """渲染文件列表页面，展示所有上传的文件"""
     files = get_all_files()
-    return render_template('view.html', files=files)
+    tags = Tag.query.all()
+    return render_template('view.html', files=files, tags=tags)
 
-"""文件下载接口（用于/view页面的下载功能）"""
+# 文件下载接口
 @app.route('/download/<saved_filename>')
 def download_file(saved_filename):
-    """文件下载接口（用于/view页面的下载功能）"""
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
     if not os.path.exists(file_path):
         return jsonify({'error': '文件不存在'}), 404
     
-    # 从数据库查询原始文件名（用于下载时显示）
     file_record = File.query.filter_by(saved_filename=saved_filename).first()
     original_filename = file_record.original_filename if file_record else saved_filename
-    
-    # 解决中文文件名编码问题
-    from urllib.parse import quote
     encoded_filename = quote(original_filename, encoding='utf-8')
     
     return send_file(
@@ -222,20 +236,103 @@ def download_file(saved_filename):
         mimetype='application/octet-stream'
     )
 
-"""删除文件"""
+# 删除文件
 @app.route('/delete/<saved_filename>', methods=['DELETE'])
 def delete_file(saved_filename):
     try:
         file_record = File.query.filter_by(saved_filename=saved_filename).first()
         if not file_record:
             return jsonify({'error': '文件不存在'}), 404
-            
+        
         # 删除文件
         if os.path.exists(file_record.file_path):
             os.remove(file_record.file_path)
-            
+        
         # 删除数据库记录
         db.session.delete(file_record)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 标签管理接口
+@app.route('/tags', methods=['POST'])
+def create_tag():
+    try:
+        tag_name = request.json.get('name').strip()
+        if not tag_name:
+            return jsonify({'error': '标签名称不能为空'}), 400
+        
+        existing_tag = Tag.query.filter_by(name=tag_name).first()
+        if existing_tag:
+            return jsonify({'error': '标签已存在'}), 400
+        
+        new_tag = Tag(name=tag_name)
+        db.session.add(new_tag)
+        db.session.commit()
+        return jsonify({'success': True, 'tag': {'id': new_tag.id, 'name': new_tag.name}})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/tags', methods=['GET'])
+def get_tags():
+    tags = Tag.query.all()
+    return jsonify([{'id': tag.id, 'name': tag.name} for tag in tags])
+
+# 添加标签到文件
+@app.route('/file/<file_id>/tags', methods=['POST'])
+def add_tags_to_file(file_id):
+    try:
+        tag_ids = request.json.get('tag_ids', [])
+        
+        # 尝试先按file_id查询，如果失败再尝试按id查询
+        file = File.query.filter_by(file_id=file_id).first()
+        if not file:
+            try:
+                # 如果是数字ID，尝试按主键id查询
+                file_id_int = int(file_id)
+                file = File.query.get(file_id_int)
+            except ValueError:
+                pass
+        
+        if not file:
+            return jsonify({'error': '文件不存在'}), 404
+        
+        tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
+        file.tags = tags
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 删除标签
+@app.route('/tags/<int:tag_id>', methods=['DELETE'])
+def delete_tag(tag_id):
+    try:
+        tag = Tag.query.get_or_404(tag_id)
+        
+        # 先移除该标签与所有文件的关联
+        for file in tag.files:
+            file.tags.remove(tag)
+        
+        # 然后删除标签
+        db.session.delete(tag)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': f'标签 "{tag.name}" 已成功删除'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 重命名文件
+@app.route('/file/<int:file_id>/rename', methods=['POST'])
+def rename_file(file_id):
+    try:
+        new_name = request.json.get('new_name').strip()
+        if not new_name:
+            return jsonify({'error': '文件名不能为空'}), 400
+        
+        file = File.query.get_or_404(file_id)
+        file.original_filename = new_name
         db.session.commit()
         
         return jsonify({'success': True})
@@ -243,4 +340,6 @@ def delete_file(saved_filename):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False,port=50000,host="0.0.0.0")
+    with app.app_context():
+        db.create_all()  # 创建数据库表
+    app.run(debug=False, host="0.0.0.0", port=50001)
