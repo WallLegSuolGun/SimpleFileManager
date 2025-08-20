@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <style>
-        /* 保持原有样式不变 */
         body {
             background-color: #ffffff;
             margin: 0;
@@ -15,6 +14,7 @@
             min-height: 100vh;
         }
 
+        /* 提示框样式 */
         .toast {
             position: fixed;
             top: 20px;
@@ -41,9 +41,9 @@
         }
         .toast-icon {
             margin-right: 8px;
-            font-weight: bold;
         }
 
+        /* 模态框样式 - 确保层级正确 */
         .modal-backdrop {
             position: fixed;
             inset: 0;
@@ -51,7 +51,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 999;
+            z-index: 1000;
             opacity: 0;
             visibility: hidden;
             transition: all 0.3s ease;
@@ -69,57 +69,64 @@
             transform: translateY(-30px);
             opacity: 0;
             transition: all 0.3s ease;
+            position: relative;
+            z-index: 1001;
         }
         .modal-backdrop.active .modal-content {
             transform: translateY(0);
             opacity: 1;
         }
 
-        /* 确保按钮容器可见且不被截断 */
         .modal-actions {
-            display: flex !important;
-            justify-content: flex-end !important;
-            gap: 12px !important;
-            margin-top: 16px !important;
-            padding-top: 16px !important;
-            border-top: 1px solid #eee !important;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
         }
 
-        /* 强制按钮可见的样式 */
+        /* 确保按钮可点击的关键样式 */
         .modal-btn {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 8px 16px !important;
-            min-width: 80px !important;
-            height: 40px !important;
-            cursor: pointer !important;
-            font-weight: 500 !important;
-            border-radius: 6px !important;
-            transition: all 0.2s ease !important;
-            text-decoration: none !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-            position: relative !important;
-            z-index: 1000 !important;
+            padding: 8px 16px;
+            min-width: 80px;
+            height: 40px;
+            cursor: pointer;
+            font-weight: 500;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            border: none;
+            outline: none;
+            position: relative;
+            z-index: 1002; /* 确保按钮在最上层 */
+            pointer-events: auto; /* 确保可以接收鼠标事件 */
         }
 
         .modal-btn-cancel {
-            background-color: #f3f4f6 !important;
-            color: #374151 !important;
-            border: 1px solid #d1d5db !important;
+            background-color: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
         }
 
         .modal-btn-confirm {
-            background-color: #3B82F6 !important;
-            color: white !important;
-            border: 1px solid #3B82F6 !important;
+            background-color: #3B82F6;
+            color: white;
+            border: 1px solid #3B82F6;
         }
 
         .modal-btn-danger {
-            background-color: #EF4444 !important;
-            color: white !important;
-            border: 1px solid #EF4444 !important;
+            background-color: #EF4444;
+            color: white;
+            border: 1px solid #EF4444;
+        }
+
+        /* 按钮交互反馈 */
+        .modal-btn:hover {
+            filter: brightness(0.9);
+        }
+        
+        .modal-btn:active {
+            transform: translateY(1px);
         }
 
         .upload-section {
@@ -153,23 +160,22 @@
             transform: translateY(-2px);
         }
 
-        /* 操作按钮样式优化 */
         .action-btn {
-            cursor: pointer !important;
-            transition: all 0.2s ease !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            padding: 4px 6px !important;
-            border-radius: 4px !important;
-            position: relative !important;
-            z-index: 10 !important;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 6px;
+            border-radius: 4px;
+            position: relative;
+            z-index: 10;
         }
         .action-btn:hover {
-            opacity: 0.85 !important;
-            background-color: rgba(0,0,0,0.05) !important;
+            opacity: 0.85;
+            background-color: rgba(0,0,0,0.05);
         }
         .action-btn:focus {
-            outline: 1px solid #ddd !important;
+            outline: 1px solid #ddd;
         }
 
         .table-responsive {
@@ -295,7 +301,7 @@
                                 <th class="px-4 py-3">标签</th>
                                 <th class="px-4 py-3">大小</th>
                                 <th class="px-4 py-3">上传时间</th>
-                                <th class="px-4 py-3 w-48">操作</th> <!-- 固定操作列宽度 -->
+                                <th class="px-4 py-3 w-48">操作</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -473,513 +479,417 @@
 
     <!-- 提示框 -->
     <div class="toast" id="toast">
-        <span class="toast-icon" id="toastIcon">✓</span>
+        <span class="toast-icon"><i class="fa fa-info-circle"></i></span>
         <span id="toastMessage"></span>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // 通用元素
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toastMessage');
-            const toastIcon = document.getElementById('toastIcon');
-            const tagFilter = document.getElementById('tagFilter');
-            const fileRows = document.querySelectorAll('tbody tr');
-            const newTagNameInput = document.getElementById('newTagName');
-            const createTagBtn = document.getElementById('createTagBtn');
-            const allTagsList = document.getElementById('allTagsList');
-            
-            // 删除相关元素
-            const deleteModal = document.getElementById('deleteModal');
-            const deleteFileName = document.getElementById('deleteFileName');
-            const cancelDelete = document.getElementById('cancelDelete');
-            const confirmDelete = document.getElementById('confirmDelete');
-            
-            // 删除标签相关元素
-            const deleteTagModal = document.getElementById('deleteTagModal');
-            const deleteTagName = document.getElementById('deleteTagName');
-            const cancelDeleteTag = document.getElementById('cancelDeleteTag');
-            const confirmDeleteTag = document.getElementById('confirmDeleteTag');
-            
-            // 编辑标签相关元素
-            const editTagsModal = document.getElementById('editTagsModal');
-            const editTagsFileName = document.getElementById('editTagsFileName');
-            const allTagsContainer = document.getElementById('allTagsContainer');
-            const newTagInput = document.getElementById('newTagInput');
-            const addNewTagBtn = document.getElementById('addNewTagBtn');
-            const cancelEditTags = document.getElementById('cancelEditTags');
-            const confirmEditTags = document.getElementById('confirmEditTags');
-            
-            // 重命名相关元素
-            const renameModal = document.getElementById('renameModal');
-            const newFileName = document.getElementById('newFileName');
-            const cancelRename = document.getElementById('cancelRename');
-            const confirmRename = document.getElementById('confirmRename');
-            
+        // 确保DOM完全加载后执行
+        document.addEventListener('DOMContentLoaded', function() {
             // 全局变量
-            let currentFile = null;
-            let allTags = [];
-            let selectedTagIds = [];
             let currentFileId = null;
+            let currentSavedName = null;
             let currentTagId = null;
+            // 提示框显示时长（毫秒）
+            const TOAST_DURATION = 2000; // 2秒，可根据需要调整
             
-            // 初始化 - 加载所有标签
+            // 初始化
             loadAllTags();
+            setupEventListeners();
             
-            // 绑定事件
-            bindEvents();
+            // 绑定所有事件监听器
+            function setupEventListeners() {
+                // 直接绑定模态框按钮事件（确保能被点击）
+                document.getElementById('cancelDelete').onclick = function() {
+                    document.getElementById('deleteModal').classList.remove('active');
+                };
+                
+                document.getElementById('confirmDelete').onclick = function() {
+                    confirmDeleteFile();
+                };
+                
+                document.getElementById('cancelDeleteTag').onclick = function() {
+                    document.getElementById('deleteTagModal').classList.remove('active');
+                };
+                
+                document.getElementById('confirmDeleteTag').onclick = function() {
+                    confirmDeleteTag();
+                };
+                
+                // 其他模态框按钮
+                document.getElementById('cancelEditTags').onclick = function() {
+                    document.getElementById('editTagsModal').classList.remove('active');
+                };
+                
+                document.getElementById('confirmEditTags').onclick = function() {
+                    confirmEditTags();
+                };
+                
+                document.getElementById('cancelRename').onclick = function() {
+                    document.getElementById('renameModal').classList.remove('active');
+                };
+                
+                document.getElementById('confirmRename').onclick = function() {
+                    confirmRenameFile();
+                };
+                
+                // 创建标签按钮
+                document.getElementById('createTagBtn').onclick = createNewTag;
+                
+                // 添加新标签按钮
+                document.getElementById('addNewTagBtn').onclick = addNewTagInEditModal;
+                
+                // 标签筛选
+                document.getElementById('tagFilter').onchange = filterFilesByTag;
+                
+                // 使用事件委托处理动态生成的按钮
+                document.body.addEventListener('click', function(e) {
+                    // 删除文件按钮
+                    if (e.target.closest && e.target.closest('.delete-btn')) {
+                        const btn = e.target.closest('.delete-btn');
+                        currentSavedName = btn.dataset.saved;
+                        const fileName = btn.dataset.name;
+                        
+                        document.getElementById('deleteFileName').textContent = fileName;
+                        document.getElementById('deleteModal').classList.add('active');
+                        e.stopPropagation();
+                    }
+                    
+                    // 删除标签按钮
+                    if (e.target.closest && e.target.closest('.delete-tag-btn')) {
+                        const btn = e.target.closest('.delete-tag-btn');
+                        currentTagId = btn.dataset.tagId;
+                        const tagName = btn.dataset.tagName;
+                        
+                        document.getElementById('deleteTagName').textContent = tagName;
+                        document.getElementById('deleteTagModal').classList.add('active');
+                        e.stopPropagation();
+                    }
+                    
+                    // 编辑标签按钮
+                    if (e.target.closest && e.target.closest('.edit-tags-btn')) {
+                        const btn = e.target.closest('.edit-tags-btn');
+                        currentFileId = btn.dataset.fileId;
+                        const fileName = btn.dataset.fileName;
+                        
+                        document.getElementById('editTagsFileName').textContent = `文件: ${fileName}`;
+                        document.getElementById('editTagsModal').classList.add('active');
+                        loadFileTags(currentFileId);
+                        e.stopPropagation();
+                    }
+                    
+                    // 重命名按钮
+                    if (e.target.closest && e.target.closest('.rename-btn')) {
+                        const btn = e.target.closest('.rename-btn');
+                        currentFileId = btn.dataset.fileId;
+                        const fileName = btn.dataset.fileName;
+                        
+                        document.getElementById('newFileName').value = fileName;
+                        document.getElementById('renameModal').classList.add('active');
+                        
+                        // 聚焦到输入框
+                        setTimeout(() => {
+                            const input = document.getElementById('newFileName');
+                            input.focus();
+                        }, 100);
+                        e.stopPropagation();
+                    }
+                });
+            }
             
-            // 绑定所有事件
-            function bindEvents() {
-                // 绑定创建标签事件
-                createTagBtn.addEventListener('click', createNewTag);
-                
-                // 绑定编辑标签按钮事件
-                document.querySelectorAll('.edit-tags-btn').forEach(button => {
-                    button.addEventListener('click', handleEditTagsClick);
-                });
-                
-                // 绑定重命名按钮事件
-                document.querySelectorAll('.rename-btn').forEach(button => {
-                    button.addEventListener('click', handleRenameClick);
-                });
-                
-                // 绑定删除按钮事件
-                document.querySelectorAll('.delete-btn').forEach(button => {
-                    button.addEventListener('click', handleDeleteClick);
-                });
-                
-                // 标签筛选功能
-                tagFilter.addEventListener('change', filterByTag);
-                
-                // 编辑标签模态框事件
-                cancelEditTags.addEventListener('click', () => hideModal(editTagsModal));
-                confirmEditTags.addEventListener('click', confirmEditTagsHandler);
-                addNewTagBtn.addEventListener('click', addNewTagInModal);
-                
-                // 重命名模态框事件
-                cancelRename.addEventListener('click', () => hideModal(renameModal));
-                confirmRename.addEventListener('click', confirmRenameHandler);
-                
-                // 删除模态框事件
-                cancelDelete.addEventListener('click', () => hideModal(deleteModal));
-                confirmDelete.addEventListener('click', confirmDeleteHandler);
-                
-                // 删除标签模态框事件
-                cancelDeleteTag.addEventListener('click', () => hideModal(deleteTagModal));
-                confirmDeleteTag.addEventListener('click', confirmDeleteTagHandler);
-                
-                // 点击模态框背景关闭
-                [deleteModal, editTagsModal, renameModal, deleteTagModal].forEach(modal => {
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal) {
-                            hideModal(modal);
-                        }
+            // 加载所有标签
+            function loadAllTags() {
+                fetch('/tags')
+                    .then(response => {
+                        if (!response.ok) throw new Error('加载标签失败');
+                        return response.json();
+                    })
+                    .then(tags => {
+                        renderTagsList(tags);
+                    })
+                    .catch(error => {
+                        console.error('加载标签失败:', error);
+                        showToast('加载标签失败，请稍后重试', 'error');
                     });
+            }
+            
+            // 渲染标签列表
+            function renderTagsList(tags) {
+                const container = document.getElementById('allTagsList');
+                container.innerHTML = '';
+                
+                if (tags.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-sm">暂无标签</p>';
+                    return;
+                }
+                
+                tags.forEach(tag => {
+                    const tagItem = document.createElement('div');
+                    tagItem.className = 'tag-item';
+                    tagItem.innerHTML = `
+                        <div class="flex items-center">
+                            <span class="tag-badge">${tag.name}</span>
+                        </div>
+                        <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
+                            <i class="fa fa-times"></i> 删除
+                        </button>
+                    `;
+                    container.appendChild(tagItem);
                 });
             }
             
             // 创建新标签
             function createNewTag() {
-                const tagName = newTagNameInput.value.trim();
-                if (!tagName) return;
-                
-                fetch('/tags', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name: tagName})
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        newTagNameInput.value = '';
-                        loadAllTags();
-                        showToast(`标签 "${tagName}" 创建成功`);
-                    } else {
-                        showToast(data.error || '创建标签失败', false);
-                    }
-                })
-                .catch(error => {
-                    console.error('创建标签失败:', error);
-                    showToast('创建标签失败', false);
-                });
-            }
-            
-            // 加载所有标签并显示
-            function loadAllTags() {
-                return fetch('/tags')
-                    .then(response => response.json())
-                    .then(tags => {
-                        allTags = tags;
-                        renderAllTagsList();
-                        return tags;
-                    })
-                    .catch(error => {
-                        console.error('加载标签失败:', error);
-                        showToast('加载标签失败', false);
-                        return [];
-                    });
-            }
-            
-            // 渲染所有标签列表（用于标签管理区域）
-            function renderAllTagsList() {
-                allTagsList.innerHTML = '';
-                
-                if (allTags.length === 0) {
-                    allTagsList.innerHTML = '<p class="text-gray-500 text-sm">暂无标签，请创建新标签</p>';
+                const tagName = document.getElementById('newTagName').value.trim();
+                if (!tagName) {
+                    showToast('请输入标签名称', 'error');
                     return;
                 }
                 
-                allTags.forEach(tag => {
-                    const tagEl = document.createElement('div');
-                    tagEl.className = 'tag-item';
-                    tagEl.innerHTML = `
-                        <span class="tag-badge">${tag.name}</span>
-                        <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
-                            <i class="fa fa-times"></i> 删除
-                        </button>
-                    `;
-                    
-                    // 绑定删除标签事件
-                    tagEl.querySelector('.delete-tag-btn').addEventListener('click', (e) => {
-                        currentTagId = parseInt(e.target.closest('.delete-tag-btn').dataset.tagId);
-                        const tagName = e.target.closest('.delete-tag-btn').dataset.tagName;
-                        
-                        deleteTagName.textContent = tagName;
-                        showModal(deleteTagModal);
+                fetch('/tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: tagName })
+                })
+                .then(response => {
+                    if (!response.ok) return response.json().then(data => {
+                        throw new Error(data.error || '创建标签失败');
                     });
-                    
-                    allTagsList.appendChild(tagEl);
+                    return response.json();
+                })
+                .then(() => {
+                    showToast('标签创建成功');
+                    document.getElementById('newTagName').value = '';
+                    loadAllTags();
+                })
+                .catch(error => {
+                    showToast(error.message, 'error');
                 });
             }
             
             // 确认删除标签
-            function confirmDeleteTagHandler() {
+            function confirmDeleteTag() {
                 if (!currentTagId) return;
                 
-                fetch(`/tags/${currentTagId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (response.ok && data.success) {
-                        showToast(data.message || '标签删除成功');
-                        hideModal(deleteTagModal);
-                        loadAllTags(); // 重新加载标签列表
-                        // 刷新标签筛选下拉框
-                        refreshTagFilter();
-                    } else {
-                        showToast(data.error || '删除标签失败', false);
-                    }
-                })
-                .catch(error => {
-                    console.error('删除标签失败:', error);
-                    showToast('删除标签失败', false);
-                });
-            }
-            
-            // 刷新标签筛选下拉框
-            function refreshTagFilter() {
-                const currentValue = tagFilter.value;
-                const selectedIndex = tagFilter.selectedIndex;
-                
-                // 清空现有选项（保留"所有标签"）
-                while (tagFilter.options.length > 1) {
-                    tagFilter.remove(1);
-                }
-                
-                // 添加新标签选项
-                allTags.forEach(tag => {
-                    const option = document.createElement('option');
-                    option.value = tag.id;
-                    option.textContent = tag.name;
-                    tagFilter.appendChild(option);
-                });
-                
-                // 尝试恢复之前的选择
-                if (currentValue === 'all' || !allTags.some(tag => tag.id.toString() === currentValue)) {
-                    tagFilter.selectedIndex = 0;
-                } else {
-                    tagFilter.value = currentValue;
-                }
-                
-                // 触发筛选事件
-                filterByTag();
-            }
-            
-            // 编辑标签按钮点击处理函数
-            function handleEditTagsClick(e) {
-                e.stopPropagation();
-                e.preventDefault();
-                
-                currentFileId = this.getAttribute('data-file-id');
-                const fileName = this.getAttribute('data-file-name');
-                
-                if (!currentFileId) {
-                    console.error('未找到文件ID');
-                    return;
-                }
-                
-                editTagsFileName.textContent = `文件: ${fileName}`;
-                
-                // 加载所有标签和文件当前标签
-                loadAllTags().then(() => {
-                    getFileTags(currentFileId).then(fileTagIds => {
-                        selectedTagIds = [...fileTagIds];
-                        renderTagCheckboxes(selectedTagIds);
-                        showModal(editTagsModal);
+                fetch(`/tags/${currentTagId}`, { method: 'DELETE' })
+                    .then(response => {
+                        if (!response.ok) return response.json().then(data => {
+                            throw new Error(data.error || '删除标签失败');
+                        });
+                        return response.json();
+                    })
+                    .then(() => {
+                        document.getElementById('deleteTagModal').classList.remove('active');
+                        showToast('标签删除成功');
+                        loadAllTags();
+                        
+                        // 延迟刷新页面，确保用户看到提示
+                        setTimeout(refreshFileList, TOAST_DURATION);
+                    })
+                    .catch(error => {
+                        showToast(error.message, 'error');
                     });
-                });
-            }
-            
-            // 重命名按钮点击处理函数
-            function handleRenameClick(e) {
-                e.stopPropagation();
-                e.preventDefault();
-                
-                currentFileId = this.getAttribute('data-file-id');
-                const fileName = this.getAttribute('data-file-name');
-                
-                if (!currentFileId) {
-                    console.error('未找到文件ID');
-                    return;
-                }
-                
-                // 提取文件名和扩展名
-                const lastDotIndex = fileName.lastIndexOf('.');
-                let baseName = fileName;
-                let extension = '';
-                
-                if (lastDotIndex !== -1) {
-                    baseName = fileName.substring(0, lastDotIndex);
-                    extension = fileName.substring(lastDotIndex);
-                }
-                
-                newFileName.value = fileName;
-                showModal(renameModal);
-            }
-            
-            // 删除按钮点击处理函数
-            function handleDeleteClick(e) {
-                e.stopPropagation();
-                e.preventDefault();
-                
-                currentFile = {
-                    saved: this.getAttribute('data-saved'),
-                    name: this.getAttribute('data-name')
-                };
-                deleteFileName.textContent = currentFile.name;
-                showModal(deleteModal);
             }
             
             // 按标签筛选文件
-            function filterByTag() {
-                const selectedTag = tagFilter.value;
-                fileRows.forEach(row => {
-                    if (selectedTag === 'all') {
-                        row.style.display = '';
-                    } else {
-                        const rowTags = row.dataset.tags.split(',').filter(Boolean);
-                        row.style.display = rowTags.includes(selectedTag) ? '' : 'none';
-                    }
+            function filterFilesByTag() {
+                const selectedTagId = this.value;
+                const rows = document.querySelectorAll('tbody tr');
+                
+                rows.forEach(row => {
+                    row.style.display = selectedTagId === 'all' || 
+                                      row.dataset.tags.includes(selectedTagId) ? '' : 'none';
                 });
             }
-
-            // 显示提示
-            function showToast(message, isSuccess = true) {
-                toastMessage.textContent = message;
-                toastIcon.textContent = isSuccess ? '✓' : '!';
-                toast.className = 'toast';
-                if (!isSuccess) {
-                    toast.classList.add('toast-error');
-                }
-                toast.classList.add('show');
+            
+            // 确认删除文件
+            function confirmDeleteFile() {
+                if (!currentSavedName) return;
                 
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                }, 3000);
-            }
-            
-            // 显示模态框
-            function showModal(modal) {
-                modal.classList.add('active');
-                document.body.style.overflow = 'hidden';
-            }
-            
-            // 隐藏模态框
-            function hideModal(modal) {
-                modal.classList.remove('active');
-                document.body.style.overflow = '';
-            }
-            
-            // 获取文件当前标签
-            function getFileTags(fileId) {
-                return fetch(`/file/${fileId}/tags`)
+                fetch(`/delete/${currentSavedName}`, { method: 'DELETE' })
                     .then(response => {
-                        if (!response.ok) {
-                            throw new Error('获取文件标签失败');
-                        }
+                        if (!response.ok) return response.json().then(data => {
+                            throw new Error(data.error || '删除文件失败');
+                        });
+                        return response.json();
+                    })
+                    .then(() => {
+                        document.getElementById('deleteModal').classList.remove('active');
+                        showToast('文件删除成功');
+                        
+                        // 延迟刷新页面，确保用户看到提示
+                        setTimeout(refreshFileList, TOAST_DURATION);
+                    })
+                    .catch(error => {
+                        showToast(error.message, 'error');
+                    });
+            }
+            
+            // 加载文件的标签
+            function loadFileTags(fileId) {
+                fetch(`/file/${fileId}/tags`)
+                    .then(response => {
+                        if (!response.ok) return response.json().then(data => {
+                            throw new Error(data.error || '加载文件标签失败');
+                        });
                         return response.json();
                     })
                     .then(data => {
-                        return data.tags.map(tag => tag.id);
+                        fetch('/tags')
+                            .then(res => res.json())
+                            .then(allTags => {
+                                renderEditTagsModal(allTags, data.tags);
+                            });
                     })
                     .catch(error => {
-                        console.error('获取文件标签失败:', error);
-                        showToast('获取文件标签失败', false);
-                        return [];
+                        showToast(error.message, 'error');
                     });
             }
             
-            // 渲染标签选择列表
-            function renderTagCheckboxes(selectedIds) {
-                allTagsContainer.innerHTML = '';
+            // 渲染编辑标签模态框
+            function renderEditTagsModal(allTags, fileTags) {
+                const container = document.getElementById('allTagsContainer');
+                container.innerHTML = '';
                 
                 if (allTags.length === 0) {
-                    allTagsContainer.innerHTML = '<p class="text-gray-500">暂无标签，请添加新标签</p>';
+                    container.innerHTML = '<p class="text-gray-500 text-sm">暂无标签，请先创建标签</p>';
                     return;
                 }
                 
+                const fileTagIds = fileTags.map(tag => tag.id);
+                
                 allTags.forEach(tag => {
-                    const tagEl = document.createElement('div');
-                    tagEl.className = 'tag-item';
-                    tagEl.innerHTML = `
-                        <div>
-                            <input type="checkbox" data-tag-id="${tag.id}" 
-                                   class="tag-checkbox" 
-                                   ${selectedIds.includes(tag.id) ? 'checked' : ''}>
-                            <label for="tag-${tag.id}">${tag.name}</label>
-                        </div>
+                    const isChecked = fileTagIds.includes(tag.id);
+                    const tagItem = document.createElement('div');
+                    tagItem.className = 'flex items-center';
+                    tagItem.innerHTML = `
+                        <input type="checkbox" class="tag-checkbox" 
+                               data-tag-id="${tag.id}" ${isChecked ? 'checked' : ''}>
+                        <span class="tag-badge">${tag.name}</span>
                     `;
-                    
-                    tagEl.querySelector('.tag-checkbox').addEventListener('change', (e) => {
-                        const tagId = parseInt(e.target.dataset.tagId);
-                        if (e.target.checked) {
-                            if (!selectedTagIds.includes(tagId)) {
-                                selectedTagIds.push(tagId);
-                            }
-                        } else {
-                            selectedTagIds = selectedTagIds.filter(id => id !== tagId);
-                        }
-                    });
-                    
-                    allTagsContainer.appendChild(tagEl);
+                    container.appendChild(tagItem);
                 });
             }
             
             // 在编辑标签模态框中添加新标签
-            function addNewTagInModal() {
-                const tagName = newTagInput.value.trim();
-                if (!tagName) return;
+            function addNewTagInEditModal() {
+                const tagName = document.getElementById('newTagInput').value.trim();
+                if (!tagName) {
+                    showToast('请输入标签名称', 'error');
+                    return;
+                }
                 
                 fetch('/tags', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name: tagName})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: tagName })
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        newTagInput.value = '';
-                        loadAllTags().then(() => {
-                            renderTagCheckboxes(selectedTagIds);
-                        });
-                        showToast(`标签 "${tagName}" 创建成功`);
-                    } else {
-                        showToast(data.error || '创建标签失败', false);
-                    }
+                .then(response => {
+                    if (!response.ok) return response.json().then(data => {
+                        throw new Error(data.error || '创建标签失败');
+                    });
+                    return response.json();
+                })
+                .then(() => {
+                    showToast('标签创建成功');
+                    document.getElementById('newTagInput').value = '';
+                    loadFileTags(currentFileId);
+                    loadAllTags();
                 })
                 .catch(error => {
-                    showToast('创建标签失败', false);
+                    showToast(error.message, 'error');
                 });
             }
             
             // 确认编辑标签
-            function confirmEditTagsHandler() {
+            function confirmEditTags() {
                 if (!currentFileId) return;
+                
+                const checkedTags = [];
+                document.querySelectorAll('#allTagsContainer .tag-checkbox:checked').forEach(checkbox => {
+                    checkedTags.push(parseInt(checkbox.dataset.tagId));
+                });
                 
                 fetch(`/file/${currentFileId}/tags`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({tag_ids: selectedTagIds})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tag_ids: checkedTags })
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (response.ok && data.success) {
-                        showToast('标签更新成功');
-                        hideModal(editTagsModal);
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        showToast(data.error || '更新标签失败', false);
-                    }
+                .then(response => {
+                    if (!response.ok) return response.json().then(data => {
+                        throw new Error(data.error || '更新标签失败');
+                    });
+                    return response.json();
+                })
+                .then(() => {
+                    document.getElementById('editTagsModal').classList.remove('active');
+                    showToast('标签更新成功');
+                    
+                    // 延迟刷新页面
+                    setTimeout(refreshFileList, TOAST_DURATION);
                 })
                 .catch(error => {
-                    console.error('更新标签失败:', error);
-                    showToast('更新标签失败', false);
+                    showToast(error.message, 'error');
                 });
             }
             
-            // 确认重命名
-            function confirmRenameHandler() {
+            // 确认重命名文件
+            function confirmRenameFile() {
                 if (!currentFileId) return;
                 
-                const newName = newFileName.value.trim();
-                if (!newName) {
-                    showToast('文件名不能为空', false);
+                const newFileName = document.getElementById('newFileName').value.trim();
+                if (!newFileName) {
+                    showToast('文件名不能为空', 'error');
                     return;
                 }
                 
                 fetch(`/file/${currentFileId}/rename`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({new_name: newName})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_name: newFileName })
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (response.ok && data.success) {
-                        showToast('文件重命名成功');
-                        hideModal(renameModal);
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        showToast(data.error || '重命名失败', false);
-                    }
+                .then(response => {
+                    if (!response.ok) return response.json().then(data => {
+                        throw new Error(data.error || '重命名失败');
+                    });
+                    return response.json();
+                })
+                .then(() => {
+                    document.getElementById('renameModal').classList.remove('active');
+                    showToast('文件重命名成功');
+                    
+                    // 延迟刷新页面
+                    setTimeout(refreshFileList, TOAST_DURATION);
                 })
                 .catch(error => {
-                    console.error('重命名失败:', error);
-                    showToast('重命名失败', false);
+                    showToast(error.message, 'error');
                 });
             }
             
-            // 确认删除
-            function confirmDeleteHandler() {
-                if (!currentFile) return;
+            // 刷新文件列表
+            function refreshFileList() {
+                window.location.reload();
+            }
+            
+            // 显示提示信息
+            function showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toastMessage');
                 
-                fetch(`/delete/${currentFile.saved}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (response.ok && data.success) {
-                        showToast(`文件 "${currentFile.name}" 已成功删除`);
-                        hideModal(deleteModal);
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        showToast(data.error || '删除失败', false);
-                    }
-                })
-                .catch(error => {
-                    showToast('删除失败，请重试', false);
-                    console.error('删除错误:', error);
-                });
+                toast.className = 'toast';
+                if (type === 'error') {
+                    toast.classList.add('toast-error');
+                }
+                
+                toastMessage.textContent = message;
+                toast.classList.add('show');
+                
+                // 按照预设的时长显示提示框
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, TOAST_DURATION);
             }
         });
     </script>
 </body>
 </html>
-    
